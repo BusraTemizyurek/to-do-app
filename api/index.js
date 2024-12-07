@@ -46,6 +46,74 @@ function getUserId(req) {
     return req.oidc.user.sub;
 }
 
+async function getAuth0AccessToken() {
+    const clientId = process.env.AUTH_CLIENT_ID;
+    const clientSecret = process.env.AUTH_CLIENT_SECRET;
+    const domain = process.env.AUTH_ISSUER_BASE_URL;
+    const audience = `${domain}/api/v2/`;
+
+    const body = new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: clientId,
+        client_secret: clientSecret,
+        audience: audience
+    });
+
+    const response = await fetch(`${domain}/oauth/token`, {
+        method: 'POST',
+        body: body.toString(),
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+    });
+
+    return (await response.json()).access_token;
+}
+
+function deleteAuth0User(userId, accessToken) {
+    return fetch(`${process.env.AUTH_ISSUER_BASE_URL}/api/v2/users/${userId}`, {
+        method: 'DELETE',
+        headers: {
+            Authorization: `Bearer ${accessToken}`
+        }
+    });
+}
+
+async function deleteAccount(userId){
+    // Delete user's todo items from your database
+    await sql`
+        DELETE FROM "todo_items"
+        WHERE "user_id" = ${userId};
+    `;
+
+    // Get access token for the auth0 apis
+    const accessToken = await getAuth0AccessToken();
+
+    // Delete the user from Auth0
+    await deleteAuth0User(userId, accessToken);
+}
+
+// DELETE: Remove a user from the system and Auth0
+app.delete('/api/user', requiresAuth(), async (req, res) => {
+    const userId = getUserId(req);
+
+    try {
+       await deleteAccount(userId);
+
+        res.status(200).json({ message: 'User and their data deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/delete-account',requiresAuth(), async (req,res)=>{
+    try{
+        await deleteAccount(getUserId(req));
+        res.redirect("/logout");
+    }catch{
+        res.status(500).send("<h1>There was an error while deleting your account</h1>")
+    }
+});
 
 // GET: Retrieve all  list items
 app.get('/api', requiresAuth(), async (req, res) => {

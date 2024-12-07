@@ -290,6 +290,19 @@ async function postLocalToApi() {
     }
 }
 
+async function deleteAccount(){
+    if(!confirm("Are you sure you want to delete your account? This action cannot be undone.")){
+        return;
+    }
+    const response = await fetch(urlUser, {
+        method: "DELETE"
+    });
+
+    if (response.ok) {
+        location.href = "/logout";
+    }
+}
+
 let records;
 let lists;
 let user;
